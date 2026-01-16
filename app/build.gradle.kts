@@ -76,4 +76,6 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    implementation(project(":presentation"))
 }
