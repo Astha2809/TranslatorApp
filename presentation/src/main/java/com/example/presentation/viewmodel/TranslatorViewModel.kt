@@ -13,8 +13,6 @@ import com.example.data.api.Part
 import com.example.data.api.TranslateRequest
 import com.example.data.di.RetrofitClient
 import com.example.presentation.BuildConfig
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +22,7 @@ import java.io.ByteArrayOutputStream
 sealed interface TranslatorUiState {
     object Initial : TranslatorUiState
     object Loading : TranslatorUiState
-    data class Success(val translatedText: String,val image: Bitmap? = null) : TranslatorUiState
+    data class Success(val translatedText: String, val image: Bitmap? = null) : TranslatorUiState
     data class Error(val errorMessage: String) : TranslatorUiState
 }
 
@@ -35,9 +33,7 @@ class TranslatorViewModel : ViewModel() {
 
     private val geminiApiService = RetrofitClient.instance
 
-    // ... inside TranslatorViewModel class
-
-    fun describeImage(bitmap: Bitmap) {
+    fun describeImage(bitmap: Bitmap, style: String) {
         if (BuildConfig.API_KEY.isBlank()) {
             _uiState.value = TranslatorUiState.Error("API key not found. Please add it to your local.properties file.")
             return
@@ -51,7 +47,7 @@ class TranslatorViewModel : ViewModel() {
             val base64Image = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 
             try {
-                val prompt = "Describe this image in a few words."
+                val prompt = PromptBuilder.buildDescribeImagePrompt(style)
                 val inlineData = InlineData(mimeType = "image/jpeg", data = base64Image)
                 val request = TranslateRequest(
                     contents = listOf(
@@ -69,9 +65,7 @@ class TranslatorViewModel : ViewModel() {
                     if (body != null && body.candidates.isNotEmpty()) {
                         val firstCandidate = body.candidates.first()
                         if (firstCandidate.content?.parts != null) {
-                            val parts = firstCandidate.content!!.parts as? List<Part>
-                            val description = parts?.firstOrNull()?.text ?: ""
-                            // Pass the bitmap along with the description to the Success state
+                            val description = firstCandidate.content!!.parts?.firstOrNull()?.text ?: ""
                             _uiState.value = TranslatorUiState.Success(description, bitmap)
                         } else {
                             _uiState.value = TranslatorUiState.Error("Response blocked. Finish reason: ${firstCandidate.finishReason}")
@@ -80,7 +74,6 @@ class TranslatorViewModel : ViewModel() {
                         _uiState.value = TranslatorUiState.Error("Image description failed: No candidates received.")
                     }
                 } else {
-                    // ... (rest of the error handling is the same)
                     val errorBodyString = response.errorBody()?.string()
                     Log.e("TranslatorViewModel", "Image description failed with code ${response.code()}: $errorBodyString")
 
@@ -96,8 +89,6 @@ class TranslatorViewModel : ViewModel() {
             }
         }
     }
-// ...
-
 
     fun generatePoem(topic: String) {
         if (BuildConfig.API_KEY.isBlank()) {
@@ -118,8 +109,7 @@ class TranslatorViewModel : ViewModel() {
                     if (body != null && body.candidates.isNotEmpty()) {
                         val firstCandidate = body.candidates.first()
                         if (firstCandidate.content?.parts != null) {
-                            val parts = firstCandidate.content!!.parts as? List<Part>
-                            val poem = parts?.firstOrNull()?.text ?: ""
+                            val poem = firstCandidate.content!!.parts?.firstOrNull()?.text ?: ""
                             _uiState.value = TranslatorUiState.Success(poem)
                         } else {
                             _uiState.value = TranslatorUiState.Error("Response blocked. Finish reason: ${firstCandidate.finishReason}")
@@ -163,8 +153,7 @@ class TranslatorViewModel : ViewModel() {
                     if (body != null && body.candidates.isNotEmpty()) {
                         val firstCandidate = body.candidates.first()
                         if (firstCandidate.content?.parts != null) {
-                            val parts = firstCandidate.content!!.parts as? List<Part>
-                            val translatedText = parts?.firstOrNull()?.text ?: ""
+                            val translatedText = firstCandidate.content!!.parts?.firstOrNull()?.text ?: ""
                             _uiState.value = TranslatorUiState.Success(translatedText)
                         } else {
                             _uiState.value = TranslatorUiState.Error("Response blocked. Finish reason: ${firstCandidate.finishReason}")
