@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -30,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -41,6 +43,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,33 +54,60 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.api.GenerationConfig
 import com.example.presentation.theme.MyApplicationTheme
 import com.example.presentation.viewmodel.TranslatorUiState
 import com.example.presentation.viewmodel.TranslatorViewModel
 import dagger.hilt.android.AndroidEntryPoint
-import androidx.activity.viewModels
+import java.util.Locale
+
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val viewModel: TranslatorViewModel by viewModels()
+    private var tts: TextToSpeech? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            MyApplicationTheme {
-                TranslatorScreen(viewModel)
+
+        // Initialize TTS
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.US
             }
         }
+
+        setContent {
+            MyApplicationTheme {
+                TranslatorScreen(viewModel,onSpeak = { text ->
+                    tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+                })
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        tts?.stop()
+        tts?.shutdown()
+        super.onDestroy()
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TranslatorScreen(translatorViewModel: TranslatorViewModel) {
+fun TranslatorScreen(
+    translatorViewModel: TranslatorViewModel,
+    onSpeak: (String) -> Unit
+) {
     var textToTranslate by remember { mutableStateOf("") }
     val translatorUiState by translatorViewModel.uiState.collectAsState()
     var expanded by remember { mutableStateOf(false) }
@@ -87,7 +117,7 @@ fun TranslatorScreen(translatorViewModel: TranslatorViewModel) {
     // State for advanced settings
     var showAdvancedSettings by remember { mutableStateOf(false) }
 
-    var generationConfig by remember { mutableStateOf(GenerationConfig()) }
+    var generationConfig by remember { mutableStateOf(com.example.domain.data.GenerationConfig()) }
     val context = LocalContext.current
 
     // Description styles
@@ -122,6 +152,15 @@ fun TranslatorScreen(translatorViewModel: TranslatorViewModel) {
         }
     )
 
+    val pdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                translatorViewModel.summarizePdf(context, it)
+            }
+        }
+    )
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted: Boolean ->
@@ -130,6 +169,13 @@ fun TranslatorScreen(translatorViewModel: TranslatorViewModel) {
             }
         }
     )
+
+    // Automatically speak when Accessibility-friendly description is generated
+    LaunchedEffect(translatorUiState) {
+        if (translatorUiState is TranslatorUiState.Success && selectedStyle == "Accessibility-friendly") {
+            onSpeak((translatorUiState as TranslatorUiState.Success).translatedText)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -267,7 +313,7 @@ fun TranslatorScreen(translatorViewModel: TranslatorViewModel) {
         Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
             Button(onClick = {
                 val config = generationConfig.copy(maxOutputTokens = (textToTranslate.length * 2).coerceAtLeast(100))
-              //  translatorViewModel.translate(textToTranslate, selectedLanguage, config)
+                translatorViewModel.translate(textToTranslate, selectedLanguage,config )
             }) {
                 Text("Translate")
             }
@@ -302,6 +348,15 @@ fun TranslatorScreen(translatorViewModel: TranslatorViewModel) {
             }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { pdfLauncher.launch("application/pdf") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Summarize PDF")
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         when (val state = translatorUiState) {
@@ -320,7 +375,12 @@ fun TranslatorScreen(translatorViewModel: TranslatorViewModel) {
                             .padding(bottom = 16.dp)
                     )
                 }
-                Text(text = state.translatedText, modifier = Modifier.padding(bottom=16.dp))
+                Text(
+                    text = state.translatedText,
+                    modifier = Modifier
+                        .padding(bottom = 16.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite } // Accessibility feature
+                )
             }
             is TranslatorUiState.Error -> {
                 Text(text = state.errorMessage, color = Color.Red, modifier = Modifier.padding(bottom=16.dp))
@@ -333,6 +393,6 @@ fun TranslatorScreen(translatorViewModel: TranslatorViewModel) {
 @Composable
 fun TranslatorScreenPreview() {
     MyApplicationTheme {
-       // TranslatorScreen()
+       // TranslatorScreen(onSpeak = {})
     }
 }

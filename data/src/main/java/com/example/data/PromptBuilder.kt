@@ -26,20 +26,10 @@ object PromptBuilder {
     fun buildPoemPrompt(topic: String): String {
         return "Write a four-line poem about the following topic: $topic"
     }
+
     /**
      * Creates a prompt that asks the model to generate a caption for an image based on a specified style.
      */
-//    fun buildDescribeImagePrompt(style: String): String {
-//        return when (style) {
-//            "Short" -> "Generate a very short, one-sentence description for this image."
-//            "Detailed" -> "Generate a detailed and comprehensive description for this image, covering all key elements."
-//            "Funny" -> "Generate a short,funny and humorous caption for this image."
-//            "Professional" -> "Generate a professional and formal caption for this image, suitable for a business context."
-//            "Accessibility-friendly" -> "Generate an accessibility-friendly caption for this image, focusing on clear visual details for someone who cannot see it."
-//            else -> "Generate a clear description for this image."
-//        }
-//    }
-
     fun buildDescribeImagePrompt(style: String): String {
         val baseRules = """
         Describe only what is clearly visible in the image.
@@ -86,6 +76,13 @@ object PromptBuilder {
             Generate a clear and factual description.
         """.trimIndent()
         }
+    }
+
+    /**
+     * Creates a prompt that asks the model to summarize a document.
+     */
+    fun buildSummarizePdfPrompt(): String {
+        return "Summarize the provided PDF document. Provide key takeaways in bullet points."
     }
 
     /**

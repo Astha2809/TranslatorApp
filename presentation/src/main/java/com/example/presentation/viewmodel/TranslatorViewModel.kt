@@ -1,17 +1,18 @@
 package com.example.presentation.viewmodel
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.PromptBuilder
-
-import com.example.data.di.RetrofitClient
 import com.example.domain.data.Content
 import com.example.domain.data.InlineData
 import com.example.domain.data.Part
 import com.example.domain.data.TranslateRequest
+import com.example.domain.data.GenerationConfig
 import com.example.domain.data.usecase.TranslateUseCase
 import com.example.presentation.BuildConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,6 +36,60 @@ class TranslatorViewModel @Inject constructor(private val translateUseCase: Tran
     private val _uiState = MutableStateFlow<TranslatorUiState>(TranslatorUiState.Initial)
     val uiState: StateFlow<TranslatorUiState> = _uiState.asStateFlow()
 
+
+    fun summarizePdf(context: Context, uri: Uri) {
+        if (BuildConfig.API_KEY.isBlank()) {
+            _uiState.value = TranslatorUiState.Error("API key not found. Please add it to your local.properties file.")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = TranslatorUiState.Loading
+            try {
+                val pdfBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                if (pdfBytes != null) {
+                    val base64Pdf = Base64.encodeToString(pdfBytes, Base64.NO_WRAP)
+                    val prompt = PromptBuilder.buildSummarizePdfPrompt()
+                    val inlineData = InlineData(mimeType = "application/pdf", data = base64Pdf)
+                    val request = TranslateRequest(
+                        contents = listOf(
+                            Content(
+                                role = "user",
+                                parts = listOf(Part(text = prompt), Part(inlineData = inlineData))
+                            )
+                        )
+                    )
+
+                    val response = translateUseCase.invoke(BuildConfig.API_KEY, request)
+
+                    val candidates = response.candidates
+                    if (!candidates.isNullOrEmpty()) {
+                        val firstCandidate = candidates[0]
+                        val content = firstCandidate.content
+                        val parts = content?.parts
+                        if (!parts.isNullOrEmpty()) {
+                            val description = parts[0].text ?: ""
+                            _uiState.value = TranslatorUiState.Success(description)
+                        } else {
+                            val finishReason = firstCandidate.finishReason
+                            if (finishReason != null) {
+                                _uiState.value = TranslatorUiState.Error("Response blocked. Finish reason: $finishReason")
+                            } else {
+                                _uiState.value = TranslatorUiState.Error("Summarization failed: No content parts received.")
+                            }
+                        }
+                    } else {
+                        _uiState.value = TranslatorUiState.Error("Summarization failed: No candidates received.")
+                    }
+                } else {
+                    _uiState.value = TranslatorUiState.Error("Failed to read PDF file.")
+                }
+            } catch (e: Exception) {
+                Log.e("TranslatorViewModel", "Summarization failed", e)
+                _uiState.value = TranslatorUiState.Error(e.localizedMessage ?: "An unknown error occurred")
+            }
+        }
+    }
 
     fun describeImage(bitmap: Bitmap, style: String) {
         if (BuildConfig.API_KEY.isBlank()) {
@@ -61,33 +116,27 @@ class TranslatorViewModel @Inject constructor(private val translateUseCase: Tran
                     )
                 )
 
-            //    val response = geminiApiService.generateContent(BuildConfig.API_KEY, request)
-               val response =  translateUseCase.invoke(BuildConfig.API_KEY, request)
-                Log.d("Response from gemini",response.toString())
-                response
-//                if (response.isSuccessful) {
-//                    val body = response.body()
-//                    if (body != null && body.candidates.isNotEmpty()) {
-//                        val firstCandidate = body.candidates.first()
-//                        if (firstCandidate.content?.parts != null) {
-//                            val description = firstCandidate.content!!.parts?.firstOrNull()?.text ?: ""
-//                            _uiState.value = TranslatorUiState.Success(description, bitmap)
-//                        } else {
-//                            _uiState.value = TranslatorUiState.Error("Response blocked. Finish reason: ${firstCandidate.finishReason}")
-//                        }
-//                    } else {
-//                        _uiState.value = TranslatorUiState.Error("Image description failed: No candidates received.")
-//                    }
-//                } else {
-//                    val errorBodyString = response.errorBody()?.string()
-//                    Log.e("TranslatorViewModel", "Image description failed with code ${response.code()}: $errorBodyString")
-//
-//                    val errorMessage = when (response.code()) {
-//                        429 -> "You have exceeded your request limit. Please try again later."
-//                        else -> "Image description failed (Error ${response.code()}). Please try again."
-//                    }
-//                    _uiState.value = TranslatorUiState.Error(errorMessage)
-//                }
+                val response = translateUseCase.invoke(BuildConfig.API_KEY, request)
+
+                val candidates = response.candidates
+                if (!candidates.isNullOrEmpty()) {
+                    val firstCandidate = candidates[0]
+                    val content = firstCandidate.content
+                    val parts = content?.parts
+                    if (!parts.isNullOrEmpty()) {
+                        val description = parts[0].text ?: ""
+                        _uiState.value = TranslatorUiState.Success(description, bitmap)
+                    } else {
+                        val finishReason = firstCandidate.finishReason
+                        if (finishReason != null) {
+                            _uiState.value = TranslatorUiState.Error("Response blocked. Finish reason: $finishReason")
+                        } else {
+                            _uiState.value = TranslatorUiState.Error("Image description failed: No content parts received.")
+                        }
+                    }
+                } else {
+                    _uiState.value = TranslatorUiState.Error("Image description failed: No candidates received.")
+                }
             } catch (e: Exception) {
                 Log.e("TranslatorViewModel", "Image description failed", e)
                 _uiState.value = TranslatorUiState.Error(e.localizedMessage ?: "An unknown error occurred")
@@ -107,32 +156,27 @@ class TranslatorViewModel @Inject constructor(private val translateUseCase: Tran
                 val prompt = PromptBuilder.buildPoemPrompt(topic)
                 val request = TranslateRequest(contents = listOf(Content(role = "user", parts = listOf(Part(text = prompt)))))
 
-               // val response = geminiApiService.generateContent(BuildConfig.API_KEY, request)
-                val response =  translateUseCase.invoke(apikey = BuildConfig.API_KEY,request = request)
-                Log.d("Response", response.toString())
-//                if (response.isSuccessful) {
-//                    val body = response.body()
-//                    if (body != null && body.candidates.isNotEmpty()) {
-//                        val firstCandidate = body.candidates.first()
-//                        if (firstCandidate.content?.parts != null) {
-//                            val poem = firstCandidate.content!!.parts?.firstOrNull()?.text ?: ""
-//                            _uiState.value = TranslatorUiState.Success(poem)
-//                        } else {
-//                            _uiState.value = TranslatorUiState.Error("Response blocked. Finish reason: ${firstCandidate.finishReason}")
-//                        }
-//                    } else {
-//                        _uiState.value = TranslatorUiState.Error("Poem generation failed: No candidates received.")
-//                    }
-//                } else {
-//                    val errorBodyString = response.errorBody()?.string()
-//                    Log.e("TranslatorViewModel", "Poem generation failed with code ${response.code()}: $errorBodyString")
-//
-//                    val errorMessage = when (response.code()) {
-//                        429 -> "You have exceeded your request limit. Please try again later."
-//                        else -> "Poem generation failed (Error ${response.code()}). Please try again."
-//                    }
-//                    _uiState.value = TranslatorUiState.Error(errorMessage)
-//                }
+                val response = translateUseCase.invoke(apikey = BuildConfig.API_KEY, request = request)
+
+                val candidates = response.candidates
+                if (!candidates.isNullOrEmpty()) {
+                    val firstCandidate = candidates[0]
+                    val content = firstCandidate.content
+                    val parts = content?.parts
+                    if (!parts.isNullOrEmpty()) {
+                        val poem = parts[0].text ?: ""
+                        _uiState.value = TranslatorUiState.Success(poem)
+                    } else {
+                        val finishReason = firstCandidate.finishReason
+                        if (finishReason != null) {
+                            _uiState.value = TranslatorUiState.Error("Response blocked. Finish reason: $finishReason")
+                        } else {
+                            _uiState.value = TranslatorUiState.Error("Poem generation failed: No content parts received.")
+                        }
+                    }
+                } else {
+                    _uiState.value = TranslatorUiState.Error("Poem generation failed: No candidates received.")
+                }
             } catch (e: Exception) {
                 Log.e("TranslatorViewModel", "Poem generation failed", e)
                 _uiState.value = TranslatorUiState.Error(e.localizedMessage ?: "An unknown error occurred")
@@ -140,48 +184,43 @@ class TranslatorViewModel @Inject constructor(private val translateUseCase: Tran
         }
     }
 
-//    fun translate(text: String, language: String, generationConfig: GenerationConfig) {
-//        if (BuildConfig.API_KEY.isBlank()) {
-//            _uiState.value = TranslatorUiState.Error("API key not found. Please add it to your local.properties file.")
-//            return
-//        }
-//
-//        viewModelScope.launch {
-//            _uiState.value = TranslatorUiState.Loading
-//            try {
-//                val prompt = PromptBuilder.buildTranslatePrompt(text, language)
-//                val request = TranslateRequest(contents = listOf(Content(role = "user", parts = listOf(Part(text = prompt)))), generationConfig = generationConfig)
-//
-//           //     val response = geminiApiService.generateContent(BuildConfig.API_KEY, request)
-//                val response =  translateUseCase.invoke(apikey = BuildConfig.API_KEY,request = request)
-//
-//                if (response.isSuccessful) {
-//                    val body = response.body()
-//                    if (body != null && body.candidates.isNotEmpty()) {
-//                        val firstCandidate = body.candidates.first()
-//                        if (firstCandidate.content?.parts != null) {
-//                            val translatedText = firstCandidate.content!!.parts?.firstOrNull()?.text ?: ""
-//                            _uiState.value = TranslatorUiState.Success(translatedText)
-//                        } else {
-//                            _uiState.value = TranslatorUiState.Error("Response blocked. Finish reason: ${firstCandidate.finishReason}")
-//                        }
-//                    } else {
-//                        _uiState.value = TranslatorUiState.Error("Translation failed: No candidates received.")
-//                    }
-//                } else {
-//                    val errorBodyString = response.errorBody()?.string()
-//                    Log.e("TranslatorViewModel", "Translation failed with code ${response.code()}: $errorBodyString")
-//
-//                    val errorMessage = when (response.code()) {
-//                        429 -> "You have exceeded your request limit. Please try again later."
-//                        else -> "Translation failed (Error ${response.code()}). Please try again."
-//                    }
-//                    _uiState.value = TranslatorUiState.Error(errorMessage)
-//                }
-//            } catch (e: Exception) {
-//                Log.e("TranslatorViewModel", "Translation failed", e)
-//                _uiState.value = TranslatorUiState.Error(e.localizedMessage ?: "An unknown error occurred")
-//            }
-//        }
-//    }
+    fun translate(text: String, language: String, generationConfig: GenerationConfig) {
+        if (BuildConfig.API_KEY.isBlank()) {
+            _uiState.value = TranslatorUiState.Error("API key not found. Please add it to your local.properties file.")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = TranslatorUiState.Loading
+            try {
+                val prompt = PromptBuilder.buildTranslatePrompt(text, language)
+                val request = TranslateRequest(contents = listOf(Content(role = "user", parts = listOf(Part(text = prompt)))), generationConfig = generationConfig)
+
+                val response = translateUseCase.invoke(apikey = BuildConfig.API_KEY, request = request)
+
+                val candidates = response.candidates
+                if (!candidates.isNullOrEmpty()) {
+                    val firstCandidate = candidates[0]
+                    val content = firstCandidate.content
+                    val parts = content?.parts
+                    if (!parts.isNullOrEmpty()) {
+                        val translatedText = parts[0].text ?: ""
+                        _uiState.value = TranslatorUiState.Success(translatedText)
+                    } else {
+                        val finishReason = firstCandidate.finishReason
+                        if (finishReason != null) {
+                            _uiState.value = TranslatorUiState.Error("Response blocked. Finish reason: $finishReason")
+                        } else {
+                            _uiState.value = TranslatorUiState.Error("Translation failed: No content parts received.")
+                        }
+                    }
+                } else {
+                    _uiState.value = TranslatorUiState.Error("Translation failed: No candidates received.")
+                }
+            } catch (e: Exception) {
+                Log.e("TranslatorViewModel", "Translation failed", e)
+                _uiState.value = TranslatorUiState.Error(e.localizedMessage ?: "An unknown error occurred")
+            }
+        }
+    }
 }
