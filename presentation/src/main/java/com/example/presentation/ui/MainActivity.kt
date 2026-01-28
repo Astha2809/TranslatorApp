@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
@@ -54,19 +55,21 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.api.GenerationConfig
 import com.example.presentation.theme.MyApplicationTheme
 import com.example.presentation.viewmodel.TranslatorUiState
 import com.example.presentation.viewmodel.TranslatorViewModel
-
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.activity.viewModels
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val viewModel: TranslatorViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                TranslatorScreen()
+                TranslatorScreen(viewModel)
             }
         }
     }
@@ -74,7 +77,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TranslatorScreen(translatorViewModel: TranslatorViewModel = viewModel()) {
+fun TranslatorScreen(translatorViewModel: TranslatorViewModel) {
     var textToTranslate by remember { mutableStateOf("") }
     val translatorUiState by translatorViewModel.uiState.collectAsState()
     var expanded by remember { mutableStateOf(false) }
@@ -198,7 +201,7 @@ fun TranslatorScreen(translatorViewModel: TranslatorViewModel = viewModel()) {
                         onClick = {
                             selectedStyle = style
                             styleDropdownExpanded = false
-                            
+
                             // Automatically re-describe the image if one is already present
                             (translatorUiState as? TranslatorUiState.Success)?.image?.let { existingImage ->
                                 translatorViewModel.describeImage(existingImage, style)
@@ -264,7 +267,7 @@ fun TranslatorScreen(translatorViewModel: TranslatorViewModel = viewModel()) {
         Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
             Button(onClick = {
                 val config = generationConfig.copy(maxOutputTokens = (textToTranslate.length * 2).coerceAtLeast(100))
-                translatorViewModel.translate(textToTranslate, selectedLanguage, config)
+              //  translatorViewModel.translate(textToTranslate, selectedLanguage, config)
             }) {
                 Text("Translate")
             }
@@ -330,6 +333,6 @@ fun TranslatorScreen(translatorViewModel: TranslatorViewModel = viewModel()) {
 @Composable
 fun TranslatorScreenPreview() {
     MyApplicationTheme {
-        TranslatorScreen()
+       // TranslatorScreen()
     }
 }

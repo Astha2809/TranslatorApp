@@ -1,6 +1,9 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.google.hilt)
+    alias(libs.plugins.google.ksp)
+
 }
 
 android {
@@ -32,7 +35,9 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+
 }
+
 
 dependencies {
     implementation(libs.androidx.core.ktx)
@@ -45,5 +50,9 @@ dependencies {
     implementation(libs.retrofit.moshi)
     implementation(libs.moshi.kotlin)
     implementation(libs.okhttp.logging)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
+
+    implementation(project(":domain"))
 
 }
