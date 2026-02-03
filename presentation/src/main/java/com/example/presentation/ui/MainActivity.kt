@@ -132,6 +132,7 @@ fun TranslatorScreen(
     // Mute state
     var isMuted by remember { mutableStateOf(false) }
 
+
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview(),
         onResult = { bitmap -> if (bitmap != null) translatorViewModel.describeImage(bitmap, selectedStyle) }
@@ -409,23 +410,26 @@ fun TranslatorScreen(
                                     .fillMaxWidth()
                                     .semantics { liveRegion = LiveRegionMode.Polite }
                             )
-                            IconButton(
-                                onClick = { 
-                                    if (isMuted) {
-                                        isMuted = false
-                                        onSpeak(state.translatedText)
-                                    } else {
-                                        isMuted = true
-                                        onStopSpeaking()
-                                    }
-                                },
-                                modifier = Modifier.align(Alignment.End)
-                            ) {
-                                Icon(
-                                    imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                    contentDescription = if (isMuted) "Unmute" else "Mute"
-                                )
-                            }
+                            if(selectedStyle == "Accessibility-friendly"){
+                                IconButton(
+
+                                    onClick = {
+                                        if (isMuted) {
+                                            isMuted = false
+                                            onSpeak(state.translatedText)
+                                        } else {
+                                            isMuted = true
+                                            onStopSpeaking()
+                                        }
+                                    },
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                        contentDescription = if (isMuted) "Unmute" else "Mute"
+                                    )
+                                }
+                            } else onStopSpeaking()
                         }
                     }
                 }
