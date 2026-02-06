@@ -53,13 +53,13 @@ object PromptBuilder {
 
             "Funny" -> """
             $baseRules
-            Generate a short, lighthearted caption.
+            Generate a single sentence, lighthearted caption.
             Use gentle humor but do not add fictional elements.
         """.trimIndent()
 
             "Professional" -> """
             $baseRules
-            Generate a formal, professional caption suitable for business use.
+            Generate a formal, professional,single sentence caption suitable for business use.
             Avoid emojis, slang, or exaggeration.
         """.trimIndent()
 

@@ -164,10 +164,10 @@ fun TranslatorScreen(
         onResult = { if (it) cameraLauncher.launch(null) }
     )
 
-    LaunchedEffect(translatorUiState, isMuted) {
+    LaunchedEffect(translatorUiState, isMuted, selectedStyle) {
         if (translatorUiState is TranslatorUiState.Success && selectedStyle == "Accessibility-friendly" && !isMuted) {
             onSpeak((translatorUiState as TranslatorUiState.Success).translatedText)
-        } else if (isMuted) {
+        } else if (isMuted || selectedStyle != "Accessibility-friendly") {
             onStopSpeaking()
         }
     }
@@ -429,7 +429,7 @@ fun TranslatorScreen(
                                         contentDescription = if (isMuted) "Unmute" else "Mute"
                                     )
                                 }
-                            } else onStopSpeaking()
+                            }
                         }
                     }
                 }
