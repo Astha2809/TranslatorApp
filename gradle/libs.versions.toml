@@ -9,6 +9,9 @@ lifecycleRuntimeKtx = "2.6.1"
 activityCompose = "1.8.0"
 composeBom = "2024.09.00"
 lifecycleViewmodelCompose = "2.8.0"
+mockk = "1.13.12"
+kotlinxCoroutinesTest = "1.8.1"
+turbine = "1.1.0"
 
 retrofit = "2.11.0"
 okhttp = "5.0.0-alpha.14"
@@ -47,6 +50,9 @@ material = { group = "com.google.android.material", name = "material", version.r
 
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hiltAndroidCompiler" }
 hilt-android-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hiltAndroidCompiler" }
+mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
